@@ -36,6 +36,8 @@ const char* rnntGetStatusString(rnntStatus_t status) {
 
 
 rnntStatus_t compute_rnnt_loss(const float* const activations, //BTUV
+                             float* alphas,
+                             float* betas,
                              float* gradients,
                              const int* const flat_labels,
                              const int* const label_lengths,
@@ -50,7 +52,9 @@ rnntStatus_t compute_rnnt_loss(const float* const activations, //BTUV
         flat_labels == nullptr ||
         label_lengths == nullptr ||
         input_lengths == nullptr ||
-        costs == nullptr ||
+        alphas == nullptr ||
+        betas  == nullptr ||
+        costs  == nullptr ||
         workspace == nullptr ||
         alphabet_size <= 0 ||
         minibatch <= 0 ||
@@ -63,12 +67,15 @@ rnntStatus_t compute_rnnt_loss(const float* const activations, //BTUV
                                 options.blank_label, options.num_threads, options.batch_first);
 
         if (gradients != NULL)
-            return rnnt.cost_and_grad(activations, gradients,
+            return rnnt.cost_and_grad(activations, 
+                                        alphas,
+                                        betas,
+                                        gradients,
                                         costs,
                                         flat_labels, label_lengths,
                                         input_lengths);
         else
-            return rnnt.score_forward(activations, costs, flat_labels,
+            return rnnt.score_forward(activations, alphas, betas, costs, flat_labels,
                                         label_lengths, input_lengths);
     } else if (options.loc == RNNT_GPU) {
 #ifdef __CUDACC__
@@ -109,13 +116,12 @@ rnntStatus_t get_workspace_size(int maxT, int maxU,
     // per minibatch memory
     size_t per_minibatch_bytes = 0;
 
-    // alphas & betas
-    per_minibatch_bytes += dtype_size * maxT * maxU * 2;
-
     if (!gpu) {
         // blank & label log probability cache
         per_minibatch_bytes += dtype_size * maxT * maxU * 2;
     } else {
+        // alphas & betas
+        per_minibatch_bytes += dtype_size * maxT * maxU * 2;
         // softmax denominator
         per_minibatch_bytes += dtype_size * maxT * maxU;
         // forward-backward loglikelihood
@@ -128,6 +134,8 @@ rnntStatus_t get_workspace_size(int maxT, int maxU,
 }
 
 rnntStatus_t compute_rnnt_loss_fp64(const double* const activations, //BTUV
+                             double* alphas,
+                             double* betas,
                              double* gradients,
                              const int* const flat_labels,
                              const int* const label_lengths,
@@ -155,12 +163,15 @@ rnntStatus_t compute_rnnt_loss_fp64(const double* const activations, //BTUV
                                 options.blank_label, options.num_threads, options.batch_first);
 
         if (gradients != NULL)
-            return rnnt.cost_and_grad(activations, gradients,
+            return rnnt.cost_and_grad(activations, 
+                                        alphas,
+                                        betas,
+                                        gradients,
                                         costs,
                                         flat_labels, label_lengths,
                                         input_lengths);
         else
-            return rnnt.score_forward(activations, costs, flat_labels,
+            return rnnt.score_forward(activations, alphas, betas, costs, flat_labels,
                                         label_lengths, input_lengths);
     } else if (options.loc == RNNT_GPU) {
 #ifdef __CUDACC__

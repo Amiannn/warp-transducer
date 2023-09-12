@@ -25,6 +25,8 @@ bool small_test() {
 
     float expected_score = 4.495666;
 
+    std::vector<float> alphas(B * T * U, 0);
+    std::vector<float> betas(B * T * U, 0);
     std::vector<int> labels = {1, 2};
     std::vector<int> label_lengths = {2};
 
@@ -50,6 +52,8 @@ bool small_test() {
     void* rnnt_cpu_workspace = malloc(cpu_alloc_bytes);
 
     throw_on_error(compute_rnnt_loss(log_probs.data(),
+                                    alphas.data(),
+                                    betas.data(),
                                     NULL,
                                     labels.data(), 
                                     label_lengths.data(),
@@ -75,6 +79,7 @@ bool options_test() {
     const int T = 4;
     const int L = 3;
     const int minibatch = 2;
+    const int alpha_len = minibatch * T * L;
 
     std::vector<float> acts = {0.065357, 0.787530, 0.081592, 0.529716, 0.750675, 0.754135, 
                                 0.609764, 0.868140, 0.622532, 0.668522, 0.858039, 0.164539, 
@@ -89,6 +94,8 @@ bool options_test() {
                                 0.923670, 0.689929, 0.741898, 0.250005, 0.603430, 0.987289, 
                                 0.592606, 0.884672, 0.543450, 0.660770, 0.377128, 0.358021};
     std::vector<float> log_probs(acts.size());
+    std::vector<float> alphas(alpha_len, 0);
+    std::vector<float> betas(alpha_len, 0);
     softmax(acts.data(), alphabet_size, minibatch * T * L, log_probs.data(), true);
 
     std::vector<float> expected_grads = {-0.432226, -0.567774, 0        , -0.365650, 0        , -0.202123, 
@@ -133,6 +140,8 @@ bool options_test() {
     void* rnnt_cpu_workspace = malloc(cpu_alloc_bytes);
 
     throw_on_error(compute_rnnt_loss(log_probs.data(),
+                                    alphas.data(),
+                                    betas.data(),
                                     grads.data(),
                                     labels.data(), 
                                     label_lengths.data(),
@@ -183,6 +192,7 @@ bool inf_test() {
     const int T = 50;
     const int L = 10;
     const int minibatch = 1;
+    const int alpha_len = minibatch * T * L;
 
     std::vector<int> labels = genLabels(alphabet_size, L-1);
     labels[0] = 2;
@@ -190,6 +200,9 @@ bool inf_test() {
 
     std::vector<float> acts(alphabet_size * T * L * minibatch);
     genActs(acts);
+
+    std::vector<float> alphas(alpha_len, 0);
+    std::vector<float> betas(alpha_len, 0);
 
     std::vector<float> log_probs(acts.size());
     softmax(acts.data(), alphabet_size, minibatch * T * L, log_probs.data(), true);
@@ -217,6 +230,8 @@ bool inf_test() {
     void* rnnt_cpu_workspace = malloc(cpu_alloc_bytes);
 
     throw_on_error(compute_rnnt_loss(acts.data(),
+                                    alphas.data(),
+                                    betas.data(),
                                     grads.data(),
                                     labels.data(), 
                                     label_lengths.data(),
@@ -239,7 +254,7 @@ bool inf_test() {
     return status;
 }
 
-float numeric_grad(std::vector<float>& acts, std::vector<int>& flat_labels, std::vector<int>& label_lengths,
+float numeric_grad(std::vector<float>& acts, std::vector<float>& alphas, std::vector<float>& betas, std::vector<int>& flat_labels, std::vector<int>& label_lengths,
                 std::vector<int> sizes, int alphabet_size, int minibatch, 
                 void* rnnt_cpu_workspace, rnntOptions& options, std::vector<float>& num_grad) {
 
@@ -252,6 +267,8 @@ float numeric_grad(std::vector<float>& acts, std::vector<int>& flat_labels, std:
 
         acts[i] += epsilon;
         throw_on_error(compute_rnnt_loss(acts.data(),
+                                        alphas.data(),
+                                        betas.data(),
                                         NULL,
                                         flat_labels.data(), 
                                         label_lengths.data(),
@@ -265,6 +282,8 @@ float numeric_grad(std::vector<float>& acts, std::vector<int>& flat_labels, std:
 
         acts[i] -= 2 * epsilon;
         throw_on_error(compute_rnnt_loss(acts.data(),
+                                        alphas.data(),
+                                        betas.data(),
                                         NULL,
                                         flat_labels.data(), 
                                         label_lengths.data(),
@@ -290,6 +309,7 @@ bool grad_check(int T, int L, int alphabet_size,
                   const std::vector<int>& sizes, float tol) {
 
     const int minibatch = labels.size();
+    const int alpha_len = minibatch * T * L;
 
     std::vector<int> flat_labels;
     std::vector<int> label_lengths;
@@ -299,6 +319,8 @@ bool grad_check(int T, int L, int alphabet_size,
     }
 
     std::vector<float> costs(minibatch);
+    std::vector<float> alphas(alpha_len, 0);
+    std::vector<float> betas(alpha_len, 0);
 
     std::vector<float> grads(acts.size());
 
@@ -318,6 +340,8 @@ bool grad_check(int T, int L, int alphabet_size,
     void* rnnt_cpu_workspace = malloc(cpu_alloc_bytes);
 
     throw_on_error(compute_rnnt_loss(acts.data(),
+                                    alphas.data(),
+                                    betas.data(),
                                     grads.data(),
                                     flat_labels.data(), 
                                     label_lengths.data(),
@@ -334,7 +358,7 @@ bool grad_check(int T, int L, int alphabet_size,
     std::vector<float> num_grad(grads.size());
 
     //perform 2nd order central differencing
-    numeric_grad(acts, flat_labels, label_lengths, sizes,
+    numeric_grad(acts, alphas, betas, flat_labels, label_lengths, sizes,
             alphabet_size, minibatch, rnnt_cpu_workspace, options, num_grad);
 
     free(rnnt_cpu_workspace);

@@ -17,6 +17,7 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
 
     auto start = std::chrono::high_resolution_clock::now();
     int len = B * T * (L + 1) * A;
+    int alpha_len = B * T * L;
     float * acts = genActs(len);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
@@ -55,11 +56,13 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
 
     std::vector<float> time;
     for (int i = 0; i < 10; ++i) {
-        float * grads = new float[len];
+        float * grads  = new float[len];
+        float * alphas = new float[alpha_len]; 
+        float * betas  = new float[alpha_len]; 
         void* rnnt_cpu_workspace = malloc(cpu_alloc_bytes);
 
         start = std::chrono::high_resolution_clock::now();
-        throw_on_error(compute_rnnt_loss(acts, grads,
+        throw_on_error(compute_rnnt_loss(acts, alphas, betas, grads,
                                         flat_labels.data(), label_lengths.data(),
                                         sizes.data(),
                                         A, B,
@@ -70,6 +73,8 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
         end = std::chrono::high_resolution_clock::now();
 
         free(grads);
+        free(alphas);
+        free(betas);
         free(rnnt_cpu_workspace);
         elapsed = end - start;
         time.push_back(elapsed.count() * 1000);

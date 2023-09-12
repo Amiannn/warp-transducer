@@ -102,6 +102,8 @@ struct rnntOptions {
  *
  * */
 rnntStatus_t compute_rnnt_loss(const float* const activations,
+                             float* alphas,
+                             float* betas,
                              float* gradients,
                              const int* const flat_labels,
                              const int* const label_lengths,
@@ -113,6 +115,8 @@ rnntStatus_t compute_rnnt_loss(const float* const activations,
                              rnntOptions options);
 
 rnntStatus_t compute_rnnt_loss_fp64(const double* const activations,
+                             double* alphas,
+                             double* betas,
                              double* gradients,
                              const int* const flat_labels,
                              const int* const label_lengths,

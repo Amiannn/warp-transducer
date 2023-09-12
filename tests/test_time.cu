@@ -29,6 +29,7 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
 
     auto start = std::chrono::high_resolution_clock::now();
     int len = B * T * (L + 1) * A;
+    int alpha_len = B * T * L;
     float * acts = genActs(len);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
@@ -67,6 +68,10 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
     // cudaMemcpyAsync(acts_gpu, acts, len * sizeof(float), cudaMemcpyHostToDevice, stream);
     float* grads_gpu;
     cudaMalloc(&grads_gpu, len * sizeof(float));
+    float* alphas;
+    cudaMalloc(&alphas, alpha_len * sizeof(float));
+    float* betas;
+    cudaMalloc(&betas, alpha_len * sizeof(float));
     int* label_gpu;
     vector_to_gpu(label_gpu, flat_labels, stream);
     // cudaMalloc(&label_gpu, flat_labels.size() * sizeof(int))
@@ -92,7 +97,7 @@ bool run_test(int B, int T, int L, int A, int num_threads) {
         cudaMalloc(&rnnt_gpu_workspace, gpu_alloc_bytes);
 
         start = std::chrono::high_resolution_clock::now();
-        throw_on_error(compute_rnnt_loss(acts_gpu, grads_gpu,
+        throw_on_error(compute_rnnt_loss(acts_gpu, alphas, betas, grads_gpu,
                                         label_gpu, label_length_gpu,
                                         input_length_gpu,
                                         A, B,

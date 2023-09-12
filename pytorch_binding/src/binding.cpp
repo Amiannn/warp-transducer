@@ -5,8 +5,9 @@
 #include "rnnt.h"
 
 #ifdef WARPRNNT_ENABLE_GPU
-    #include "THC.h"
-    extern THCState* state;
+    // #include "THC.h"
+    // extern THCState* state;
+    #include <ATen/cuda/ThrustAllocator.h>
 #endif
 
 int cpu_rnnt(torch::Tensor acts,
@@ -14,6 +15,8 @@ int cpu_rnnt(torch::Tensor acts,
             torch::Tensor input_lengths,
             torch::Tensor label_lengths,
             torch::Tensor costs,
+            torch::Tensor alphas,
+            torch::Tensor betas,
             torch::Tensor grads,
             int blank_label,
             int num_threads) {
@@ -50,7 +53,8 @@ int cpu_rnnt(torch::Tensor acts,
                            false, &cpu_size_bytes);
 
         float* cpu_workspace = (float*) new unsigned char[cpu_size_bytes];
-        compute_rnnt_loss(acts.data<float>(), grads.data<float>(),
+        compute_rnnt_loss(acts.data<float>(), 
+                         alphas.data<float>(), betas.data<float>(), grads.data<float>(),
                          labels.data<int>(), label_lengths.data<int>(),
                          input_lengths.data<int>(), alphabet_size,
                          minibatch_size, costs.data<float>(),
@@ -66,7 +70,8 @@ int cpu_rnnt(torch::Tensor acts,
                            sizeof(double));
 
         double* cpu_workspace = (double*) new unsigned char[cpu_size_bytes];
-        compute_rnnt_loss_fp64(acts.data<double>(), grads.data<double>(),
+        compute_rnnt_loss_fp64(acts.data<double>(), 
+                         alphas.data<double>(), betas.data<double>(), grads.data<double>(),
                          labels.data<int>(), label_lengths.data<int>(),
                          input_lengths.data<int>(), alphabet_size,
                          minibatch_size, costs.data<double>(),
@@ -86,6 +91,8 @@ int gpu_rnnt(torch::Tensor acts,
             torch::Tensor input_lengths,
             torch::Tensor label_lengths,
             torch::Tensor costs,
+            torch::Tensor alphas,
+            torch::Tensor betas,
             torch::Tensor grads,
             int blank_label,
             int num_threads) {
@@ -117,15 +124,18 @@ int gpu_rnnt(torch::Tensor acts,
 
         cudaSetDevice(acts.get_device());
 
-        void* gpu_workspace = THCudaMalloc(state, gpu_size_bytes);
+        // void* gpu_workspace = THCudaMalloc(state, gpu_size_bytes);
+        void* gpu_workspace = c10::cuda::CUDACachingAllocator::raw_alloc(gpu_size_bytes);
 
-        compute_rnnt_loss(acts.data<float>(), grads.data<float>(),
+        compute_rnnt_loss(acts.data<float>(), 
+                         alphas.data<float>(), betas.data<float>(), grads.data<float>(),
                          labels.data<int>(), label_lengths.data<int>(),
                          input_lengths.data<int>(), alphabet_size,
                          minibatch_size, costs.data<float>(),
                          gpu_workspace, options);
 
-        THCudaFree(state, gpu_workspace);
+        // THCudaFree(state, gpu_workspace);
+        c10::cuda::CUDACachingAllocator::raw_delete(gpu_workspace);
         return 0;
         }
       case torch::ScalarType::Double:
@@ -136,15 +146,18 @@ int gpu_rnnt(torch::Tensor acts,
 
         cudaSetDevice(acts.get_device());
 
-        void* gpu_workspace = THCudaMalloc(state, gpu_size_bytes);
+        // void* gpu_workspace = THCudaMalloc(state, gpu_size_bytes);
+        void* gpu_workspace = c10::cuda::CUDACachingAllocator::raw_alloc(gpu_size_bytes);
 
-        compute_rnnt_loss_fp64(acts.data<double>(), grads.data<double>(),
+        compute_rnnt_loss_fp64(acts.data<double>(), 
+                         alphas.data<double>(), betas.data<double>(), grads.data<double>(),
                          labels.data<int>(), label_lengths.data<int>(),
                          input_lengths.data<int>(), alphabet_size,
                          minibatch_size, costs.data<double>(),
                          gpu_workspace, options);
 
-        THCudaFree(state, gpu_workspace);
+        // THCudaFree(state, gpu_workspace);
+        c10::cuda::CUDACachingAllocator::raw_delete(gpu_workspace);
         return 0;
         }
       default:
