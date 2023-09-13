@@ -9,7 +9,7 @@ __all__ = ['rnnt_loss', 'RNNTLoss']
 
 class _RNNT(Function):
     @staticmethod
-    def forward(ctx, acts, labels, act_lens, label_lens, blank, reduction):
+    def forward(ctx, acts, labels, act_lens, label_lens, blank, reduction, return_alpha_beta):
         """
         acts: Tensor of (batch x seqLength x labelLength x outputDim) containing output from network
         labels: 2 dimensional Tensor containing all the targets of the batch with zero padded
@@ -29,7 +29,6 @@ class _RNNT(Function):
         B, T, U, _ = acts.shape
         alphas = torch.zeros(B * T * U, dtype=acts.dtype)
         betas  = torch.zeros(B * T * U, dtype=acts.dtype)
-        print(f'before alphas: {alphas}')
         loss_func(acts,
                   labels,
                   act_lens,
@@ -40,25 +39,27 @@ class _RNNT(Function):
                   grads,
                   blank,
                   0)
-        print(f'after alphas: {alphas}')
         if reduction in ['sum', 'mean']:
             costs = costs.sum().unsqueeze_(-1)
             if reduction == 'mean':
                 costs /= minibatch_size
                 grads /= minibatch_size
 
-        costs = costs.to(acts.device)
-        ctx.grads = grads
-
+        costs  = costs.to(acts.device)
+        alphas = alphas.reshape(B, T, U).to(acts.device)
+        betas  = betas.reshape(B, T, U).to(acts.device)
+        ctx.grads  = grads
+        if return_alpha_beta:
+            return costs, alphas, betas
         return costs
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output, arg1=None, arg2=None):
         grad_output = grad_output.view(-1, 1, 1, 1).to(ctx.grads)
-        return ctx.grads.mul_(grad_output), None, None, None, None, None
+        return ctx.grads.mul_(grad_output), None, None, None, None, None, None
 
 
-def rnnt_loss(acts, labels, act_lens, label_lens, blank=0, reduction='mean'):
+def rnnt_loss(acts, labels, act_lens, label_lens, blank=0, reduction='mean', return_alpha_beta=False):
     """ RNN Transducer Loss
 
     Args:
@@ -75,7 +76,12 @@ def rnnt_loss(acts, labels, act_lens, label_lens, blank=0, reduction='mean'):
     if not acts.is_cuda:
         acts = torch.nn.functional.log_softmax(acts, -1)
 
-    return _RNNT.apply(acts, labels, act_lens, label_lens, blank, reduction)
+    if return_alpha_beta:
+        costs, _alphas, _betas = _RNNT.apply(acts, labels, act_lens, label_lens, blank, reduction, return_alpha_beta)
+        alphas = _alphas.detach()
+        betas  = _betas.detach()
+        return costs, alphas, betas
+    return _RNNT.apply(acts, labels, act_lens, label_lens, blank, reduction, return_alpha_beta)
 
 
 class RNNTLoss(Module):
@@ -87,11 +93,12 @@ class RNNTLoss(Module):
             'mean': the output losses will be divided by the target lengths and
             then the mean over the batch is taken. Default: 'mean'
     """
-    def __init__(self, blank=0, reduction='mean'):
+    def __init__(self, blank=0, reduction='mean', return_alpha_beta=False):
         super(RNNTLoss, self).__init__()
         self.blank = blank
         self.reduction = reduction
         self.loss = _RNNT.apply
+        self.return_alpha_beta = return_alpha_beta
 
     def forward(self, acts, labels, act_lens, label_lens):
         """
@@ -104,8 +111,12 @@ class RNNTLoss(Module):
             # NOTE manually done log_softmax for CPU version,
             # log_softmax is computed within GPU version.
             acts = torch.nn.functional.log_softmax(acts, -1)
-
-        return self.loss(acts, labels, act_lens, label_lens, self.blank, self.reduction)
+        if self.return_alpha_beta:
+            costs, _alphas, _betas = self.loss(acts, labels, act_lens, label_lens, self.blank, self.reduction, self.return_alpha_beta)
+            alphas = _alphas.detach()
+            betas  = _betas.detach()
+            return costs, alphas, betas
+        return self.loss(acts, labels, act_lens, label_lens, self.blank, self.reduction, self.return_alpha_beta)
 
 
 def check_type(var, t, name):

@@ -83,12 +83,15 @@ rnntStatus_t compute_rnnt_loss(const float* const activations, //BTUV
                                 options.blank_label, options.num_threads, options.stream);
 
         if (gradients != NULL)
-            return rnnt.cost_and_grad(activations, gradients,
+            return rnnt.cost_and_grad(activations, 
+                                        alphas,
+                                        betas,
+                                        gradients,
                                         costs,
                                         flat_labels, label_lengths,
                                         input_lengths);
         else
-            return rnnt.score_forward(activations, costs, flat_labels,
+            return rnnt.score_forward(activations, alphas, betas, costs, flat_labels,
                                         label_lengths, input_lengths);
 #else
         std::cerr << "GPU execution requested, but not compiled with GPU support" << std::endl;
@@ -121,7 +124,7 @@ rnntStatus_t get_workspace_size(int maxT, int maxU,
         per_minibatch_bytes += dtype_size * maxT * maxU * 2;
     } else {
         // alphas & betas
-        per_minibatch_bytes += dtype_size * maxT * maxU * 2;
+        // per_minibatch_bytes += dtype_size * maxT * maxU * 2;
         // softmax denominator
         per_minibatch_bytes += dtype_size * maxT * maxU;
         // forward-backward loglikelihood
@@ -179,12 +182,12 @@ rnntStatus_t compute_rnnt_loss_fp64(const double* const activations, //BTUV
                                 options.blank_label, options.num_threads, options.stream);
 
         if (gradients != NULL)
-            return rnnt.cost_and_grad(activations, gradients,
+            return rnnt.cost_and_grad(activations, alphas, betas, gradients,
                                         costs,
                                         flat_labels, label_lengths,
                                         input_lengths);
         else
-            return rnnt.score_forward(activations, costs, flat_labels,
+            return rnnt.score_forward(activations, alphas, betas, costs, flat_labels,
                                         label_lengths, input_lengths);
 #else
         std::cerr << "GPU execution requested, but not compiled with GPU support" << std::endl;

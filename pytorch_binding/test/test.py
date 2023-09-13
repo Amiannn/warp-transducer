@@ -21,7 +21,8 @@ parser = argparse.ArgumentParser(description='MXNet RNN Transducer Test.')
 parser.add_argument('--np', default=False, action='store_true', help='numpy loss')
 args = parser.parse_args()
 
-fn = rnntloss() if args.np else RNNTLoss(reduction='sum')
+return_alpha_beta = True
+fn = rnntloss() if args.np else RNNTLoss(reduction='sum', return_alpha_beta=return_alpha_beta)
 
 gpu = 1
 def wrap_and_call(acts, labels):
@@ -41,7 +42,13 @@ def wrap_and_call(acts, labels):
         lengths = lengths.cuda(gpu)
         label_lengths = label_lengths.cuda(gpu)
 
-    costs = fn(acts, labels, lengths, label_lengths)
+    if return_alpha_beta:
+        costs, alphas, betas = fn(acts, labels, lengths, label_lengths)
+        print(f'alphas: {alphas}')
+        print(f'betas : {betas}')
+    else:
+        costs = fn(acts, labels, lengths, label_lengths)
+    print(f'costs: {costs}')
     cost = torch.sum(costs)
     cost.backward()
     # print(repr(acts.grad.data.cpu().numpy()))

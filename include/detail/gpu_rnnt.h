@@ -39,6 +39,8 @@ public:
     void log_softmax(const ProbT* const acts, ProbT* denom);
 
     rnntStatus_t compute_cost_and_score(const ProbT* const acts,
+                                        ProbT* alphas,
+                                        ProbT* betas,
                                         ProbT* grad,
                                         ProbT* costs,
                                         const int* const pad_labels,
@@ -46,6 +48,8 @@ public:
                                         const int* const input_lengths);
 
     rnntStatus_t cost_and_grad(const ProbT* const acts,
+                              ProbT* alphas,
+                              ProbT* betas,
                               ProbT* grad,
                               ProbT* costs,
                               const int* const pad_labels,
@@ -53,6 +57,8 @@ public:
                               const int* const input_lengths);
 
     rnntStatus_t score_forward(const ProbT* const acts,
+                              ProbT* alphas,
+                              ProbT* betas,
                               ProbT* costs,
                               const int* const pad_labels,
                               const int* const label_lengths,
@@ -82,6 +88,8 @@ GpuRNNT<ProbT>::log_softmax(const ProbT* const acts, ProbT* denom) {
 template<typename ProbT>
 rnntStatus_t
 GpuRNNT<ProbT>::compute_cost_and_score(const ProbT* const acts,
+                                    ProbT* alphas_,
+                                    ProbT* betas_,
                                     ProbT* grads,
                                     ProbT* costs,
                                     const int* const labels,
@@ -205,6 +213,12 @@ GpuRNNT<ProbT>::compute_cost_and_score(const ProbT* const acts,
         std::cout << "DEBUG: compute_grad_kernel " << elapsed.count() * 1000 << " ms\n";
 #endif
     }
+    // alphas & betas
+    cudaMemcpyAsync(alphas_, alphas, sizeof(ProbT) * minibatch_ * maxT_ * maxU_, cudaMemcpyDeviceToHost, stream_);
+    cudaStreamSynchronize(stream_);
+    cudaMemcpyAsync(betas_, betas, sizeof(ProbT) * minibatch_ * maxT_ * maxU_, cudaMemcpyDeviceToHost, stream_);
+    cudaStreamSynchronize(stream_);
+
     // cost
     cudaMemcpyAsync(costs, llForward, sizeof(ProbT) * minibatch_, cudaMemcpyDeviceToHost, stream_);
     cudaStreamSynchronize(stream_);
@@ -217,6 +231,8 @@ GpuRNNT<ProbT>::compute_cost_and_score(const ProbT* const acts,
 template<typename ProbT>
 rnntStatus_t
 GpuRNNT<ProbT>::cost_and_grad(const ProbT* const acts,
+                       ProbT* alphas,
+                       ProbT* betas,
                        ProbT* grads,
                        ProbT* costs,
                        const int* const pad_labels,
@@ -224,6 +240,8 @@ GpuRNNT<ProbT>::cost_and_grad(const ProbT* const acts,
                        const int* const input_lengths) {
 
     if (acts == nullptr ||
+        alphas == nullptr || 
+        betas  == nullptr || 
         grads == nullptr || 
         costs == nullptr ||
         pad_labels == nullptr ||
@@ -231,23 +249,27 @@ GpuRNNT<ProbT>::cost_and_grad(const ProbT* const acts,
         input_lengths == nullptr)
         return RNNT_STATUS_INVALID_VALUE;
 
-    return compute_cost_and_score(acts, grads, costs, pad_labels, label_lengths, input_lengths);
+    return compute_cost_and_score(acts, alphas, betas, grads, costs, pad_labels, label_lengths, input_lengths);
 }
 
 template<typename ProbT>
 rnntStatus_t
 GpuRNNT<ProbT>::score_forward(const ProbT* const acts,
+                       ProbT* alphas,
+                       ProbT* betas,
                        ProbT* costs,
                        const int* const pad_labels,
                        const int* const label_lengths,
                        const int* const input_lengths) {
     
     if (acts == nullptr ||
+        alphas == nullptr ||
+        betas  == nullptr ||
         costs == nullptr ||
         pad_labels == nullptr ||
         label_lengths == nullptr ||
         input_lengths == nullptr)
         return RNNT_STATUS_INVALID_VALUE;
 
-    return compute_cost_and_score(acts, nullptr, costs, pad_labels, label_lengths, input_lengths);
+    return compute_cost_and_score(acts, alphas, betas, nullptr, costs, pad_labels, label_lengths, input_lengths);
 }

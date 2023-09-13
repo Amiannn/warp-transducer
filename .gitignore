@@ -1,0 +1,8 @@
+*pycache*
+
+build/*
+pytorch_binding/build/*
+pytorch_binding/dist/*
+pytorch_binding/warprnnt_pytorch.egg-info/*
+
+*.so
